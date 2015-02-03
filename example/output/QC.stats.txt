@@ -1,0 +1,17 @@
+
+Before Trimming
+Reads #:	100000
+Total bases:	25100000
+Reads Length:	251.00
+
+After Trimming
+Reads #:	82172 (82.17 %)
+Total bases:	16005103 (63.77 %)
+Mean Reads Length:	194.78
+  Paired Reads #:	69984 (85.17 %)
+  Paired total bases:	13581564 (84.86 %)
+  Unpaired Reads #:	12188 (14.83 %)
+  Unpaired total bases:	2423539 (15.14 %)
+
+Discarded reads #:	17828 (17.83 %)
+Trimmed bases:	9094897 (36.23 %)
