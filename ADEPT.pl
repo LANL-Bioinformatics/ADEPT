@@ -638,61 +638,6 @@ y<-1:ncol(z)
 y<-y-1
 
 #quality boxplot per base
-is.wholenumber <- function(x, tol = .Machine\$double.eps^0.5)  abs(x - round(x)) < tol
-plot(1:length(x),x,type=\'n\',xlab=\"Position\",ylab=\"Quality score\", ylim=c(0,max(y)+1),xaxt=\'n\')
-axis(1,at=x,labels=TRUE)
-title(\"Quality Boxplot Per Cycle\")
-
-for (i in 1:length(x)) {
-  total<-sum(z[i,])
-  qAvg<-sum(y*z[i,])/total
-  if (is.wholenumber(total/2))
-  {
-     med<-( min(y[cumsum((z[i,]))>=total/2]) + min(y[cumsum((z[i,]))>=total/2+1]) )/2
-  }
-  else
-  {
-     med<-min(y[cumsum((z[i,]))>=ceiling(total/2)])
-  }
-
-  if (is.wholenumber(total/4))
-  {
-     Q1<-( min(y[cumsum((z[i,]))>=total/4]) + min(y[cumsum((z[i,]))>=total/4+1]) )/2
-  }
-  else
-  {
-     Q1<-min(y[cumsum((z[i,]))>=round(total/4)])
-  }
-
-  if (is.wholenumber(total/4*3))
-  {
-     Q3<-( min(y[cumsum((z[i,]))>=total/4*3]) + min(y[cumsum((z[i,]))>=total/4*3+1]) )/2
-  }
-  else
-  {
-     Q3<-min(y[cumsum((z[i,]))>=round(total/4*3)])
-  }
-  maxi<-max(y[z[i,]>0])
-  mini<-min(y[z[i,]>0])
-  #if (Q1 == 'Inf') {Q1 = maxi}
-  if (Q3 == \'Inf\') {Q3 = maxi}
-  IntQ<-Q3-Q1
-  mini<-max(mini,Q1-1.5*IntQ)
-  maxi<-min(maxi,Q3+1.5*IntQ)
-  rect(i-0.4,Q1,i+0.4,Q3,col=\'bisque\')
-  lines(c(i,i),c(Q3,maxi),lty=2)
-  lines(c(i,i),c(mini,Q1),lty=2)
-  lines(c(i-0.4,i+0.4),c(mini,mini))
-  lines(c(i-0.4,i+0.4),c(maxi,maxi))
-  lines(c(i-0.4,i+0.4),c(med,med))
-  #points(i,qAvg,col=\'red\')
-  reads_num<-prettyNum($trimmed_num,big.mark=",")
-  reads_base<-prettyNum($total_trimmed_seq_len,big.mark=",")
-  abline(h=20, col = \"gray60\")
-  legend(\"bottomleft\",c(paste(\"# Reads: \",reads_num),paste(\"# Bases:\",reads_base)))
-## for outliers
-#points()
-}
 
 #quality 3D plot
 persp(x,y,z/1000000,theta = 50, phi = 30, expand = 0.7, col = \"#0000ff22\",ntick=10,ticktype=\"detailed\",xlab=\'Position\',ylab=\'Score\',zlab=\"\",r=6,shade=0.75)
