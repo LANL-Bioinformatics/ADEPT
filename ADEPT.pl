@@ -42,15 +42,14 @@ print <<"END";
             -qW            threhold to identifying a nucleotide as an error if it falls below a defined 
                            percentage of the quality scores for that position (default = 0)
             -qMN           ratio of the of the base quality to the qualities of upstream and downstream positions
-                           By default, all qIN ratios must be at least 0.4 to be considered as a potential erroneous base 
+                           By default, all qMN ratios must be at least 0.4 to be considered as a potential erroneous base 
                            (i.e. all adjacent qualities must be at least 2.5 times higher than the quality of the position being investigated).
             -qNS           threhold to identify a nucleotide as an potential error if its neighbors' quality falls below a defined 
                            percentage of the quality scores for that neighbors' position within the sampled run (default = 0.3)
+            -trimcenter    whether performing center trimming by spliting the reads at center erroneous bases (yes or no, default is no)
 
      Filters:
             -min_L        Trimmed sequence length will have at least minimum length (default:50)
-            
-
             					
      Q_Format:
             -ascii        Encoding type: 33 or 64 or autoCheck (default)
@@ -107,10 +106,10 @@ my $nontrimed_output;
 my $cutlimit=0.3;
 my $lowperc=0;
 my $upperc=0.25;
- my $discperc=0.35;
+ my $discperc=0.4;
 my $cutlimit1= $cutlimit;
 my $cutlimit2= $cutlimit;
-
+my $trimcenter='no';
 
 # Options
 GetOptions("qE=i"         => \$opt_q,
@@ -129,6 +128,7 @@ GetOptions("qE=i"         => \$opt_q,
            'prefix=s'     => \$prefix,
            'd=s'          => \$outDir,
            'stats=s'      => \$stats_output,
+           'trimcenter=s'      => \$trimcenter,  
            'out_non_trim_reads'      => \$nontrimed_output,
            'debug'        => \$debug,
            "help|?"       => sub{Usage()} );
@@ -217,7 +217,6 @@ my ( $i_file_name, $i_path, $i_suffix );
   
   foreach my $input (@unpaired_files,@paired_files){
      print "Processing $input file\n";
-     #print $STATS_fh "Processing $input file\n";
      my ($reads1_file,$reads2_file) = split /\s+/,$input;
   
      # check file 
@@ -287,12 +286,9 @@ my ( $i_file_name, $i_path, $i_suffix );
 		         $len_hash{$key} += $value;   
           }
 
-          #print $STATS_fh " Processed $total_num/$total_count\n";
           print "Processed $total_num/$total_count\n";
           printf (" Post Trimming Length(Mean, Std, Median, Max, Min) of %d reads with Overall quality %.2f\n",$processed_num, $total_score/$nums_ref->{total_trim_seq_len});
           printf (" (%.2f, %.2f, %.1f, %d, %d)\n",$trim_seq_len_avg,$trim_seq_len_std,$median,$max,$min);
-          #unlink $split_files[$ident];
-          #unlink $split_files_2[$ident] if ($split_files_2[$ident]);
          
         } else {  # problems occuring during storage or retrieval will throw a warning
           print qq|No message received from child process $pid! on $ident\n|;
@@ -435,7 +431,7 @@ sub build_initial_quality_matrix
 
 sub print_final_stats{
     open (my $fh, ">$stats_output") or die "$!\t$stats_output\n";
-    # stats
+    # stats output
     print $fh "\nBefore Trimming\n";
     print $fh "Reads #:\t$total_num\n";
     print $fh "Total bases:\t$total_raw_seq_len\n";
@@ -638,6 +634,61 @@ y<-1:ncol(z)
 y<-y-1
 
 #quality boxplot per base
+is.wholenumber <- function(x, tol = .Machine\$double.eps^0.5)  abs(x - round(x)) < tol
+plot(1:length(x),x,type=\'n\',xlab=\"Position\",ylab=\"Quality score\", ylim=c(0,max(y)+1),xaxt=\'n\')
+axis(1,at=x,labels=TRUE)
+title(\"Quality Boxplot Per Cycle\")
+
+for (i in 1:length(x)) {
+  total<-sum(z[i,])
+  qAvg<-sum(y*z[i,])/total
+  if (is.wholenumber(total/2))
+  {
+     med<-( min(y[cumsum((z[i,]))>=total/2]) + min(y[cumsum((z[i,]))>=total/2+1]) )/2
+  }
+  else
+  {
+     med<-min(y[cumsum((z[i,]))>=ceiling(total/2)])
+  }
+
+  if (is.wholenumber(total/4))
+  {
+     Q1<-( min(y[cumsum((z[i,]))>=total/4]) + min(y[cumsum((z[i,]))>=total/4+1]) )/2
+  }
+  else
+  {
+     Q1<-min(y[cumsum((z[i,]))>=round(total/4)])
+  }
+
+  if (is.wholenumber(total/4*3))
+  {
+     Q3<-( min(y[cumsum((z[i,]))>=total/4*3]) + min(y[cumsum((z[i,]))>=total/4*3+1]) )/2
+  }
+  else
+  {
+     Q3<-min(y[cumsum((z[i,]))>=round(total/4*3)])
+  }
+  maxi<-max(y[z[i,]>0])
+  mini<-min(y[z[i,]>0])
+  #if (Q1 == 'Inf') {Q1 = maxi}
+  if (Q3 == \'Inf\') {Q3 = maxi}
+  IntQ<-Q3-Q1
+  mini<-max(mini,Q1-1.5*IntQ)
+  maxi<-min(maxi,Q3+1.5*IntQ)
+  rect(i-0.4,Q1,i+0.4,Q3,col=\'bisque\')
+  lines(c(i,i),c(Q3,maxi),lty=2)
+  lines(c(i,i),c(mini,Q1),lty=2)
+  lines(c(i-0.4,i+0.4),c(mini,mini))
+  lines(c(i-0.4,i+0.4),c(maxi,maxi))
+  lines(c(i-0.4,i+0.4),c(med,med))
+  #points(i,qAvg,col=\'red\')
+  reads_num<-prettyNum($trimmed_num,big.mark=",")
+  reads_base<-prettyNum($total_trimmed_seq_len,big.mark=",")
+  abline(h=20, col = \"gray60\")
+  legend(\"bottomleft\",c(paste(\"# Reads: \",reads_num),paste(\"# Bases:\",reads_base)))
+## for outliers
+#points()
+}
 
 #quality 3D plot
 persp(x,y,z/1000000,theta = 50, phi = 30, expand = 0.7, col = \"#0000ff22\",ntick=10,ticktype=\"detailed\",xlab=\'Position\',ylab=\'Score\',zlab=\"\",r=6,shade=0.75)
@@ -812,6 +863,7 @@ sub qc_process {
         $raw_seq_num++;
         $s = <IN>;  # read sequence
         chomp $s;
+        $s=uc($s);
         $h2 = <IN>;  # read second header
         $q = <IN>;  # read quality scores
         chomp $q;
@@ -870,7 +922,6 @@ sub qc_process {
             $paired_seq_num +=2;
             $total_paired_bases += $trim_len + $r2_trim_len;  
         }
- 
         # output trimmed files
         if (! $qc_only)
         {
@@ -971,7 +1022,6 @@ sub adept_trim
     {
         $at_least_scan--;    
         if ($pos_3>$num_after_neg and $area>=0) {$at_least_scan=$num_after_neg;}
-    #	    $area += $opt_q - (ord(substr($q,$pos_3-1,1))-$ascii);
             $area += $opt_q - $numqual[$pos_3-1];
 	    if ($area > $maxArea) {
 		    $maxArea = $area;
@@ -990,7 +1040,6 @@ sub adept_trim
     {
         $at_least_scan--; 
         if ($pos_5<($final_pos_3-$num_after_neg) and $area>=0) {$at_least_scan=$num_after_neg;}
-#	    $area += $opt_q - (ord(substr($q,$pos_5-1,1))-$ascii);
             $area += $opt_q - $numqual[$pos_5-1];
 	    if ($area > $maxArea) {
 		    $maxArea = $area;
@@ -998,10 +1047,18 @@ sub adept_trim
 	    }
 	    $pos_5++;
     }
-         foreach  (my $tmpi=0;$tmpi<$final_pos_5;$tmpi++) {$trim_seq[$tmpi]='n';}
-         foreach  (my $tmpi=$final_pos_3;$tmpi<$len;$tmpi++) {$trim_seq[$tmpi]='n';}
-  
-  #ADEPT trimming;
+         foreach  (my $tmpi=0;$tmpi<$final_pos_5;$tmpi++) {$trim_seq[$tmpi]='n';$trim_qual_seq[$tmpi]=0;}
+         foreach  (my $tmpi=$final_pos_3;$tmpi<$len;$tmpi++) {$trim_seq[$tmpi]='n';$trim_qual_seq[$tmpi]=0;}
+         my $tmpends=$final_pos_3-1;         
+         my $endstrimseq;
+         my $endstrimqual;
+       
+        if (($tmpends-$final_pos_5) >= $minilength)
+           {
+          $endstrimseq=join '', @trim_seq[$final_pos_5..$tmpends];
+          $endstrimqual=join '', @trim_qual_seq[$final_pos_5..$tmpends];
+           }
+  #ADEPT center trimming;
  
   my $tmpcount=0;
   my $tmpstart=0;
@@ -1037,10 +1094,10 @@ sub adept_trim
         $uppos=int($upperc*$#{$sortbasequal{$pos}}+0.5);
        $lowpos=int($lowperc*$#{$sortbasequal{$pos}}+0.5);
 
-    if ($qual<=$sortbasequal{$pos}[$uppos]  || $trim_seq[$pos] eq 'N'|| $trim_seq[$pos] eq 'n') {
+    if ($qual<=$sortbasequal{$pos}[$uppos]  || $trim_seq[$pos] eq 'n') {
 
-     if ($qual<=$sortbasequal{$pos}[$lowpos]  || $trim_seq[$pos] eq 'N' || $trim_seq[$pos] eq 'n' ) {
-        if ($tmpcount>=$minilength) {
+     if ($qual<=$sortbasequal{$pos}[$lowpos]  || $trim_seq[$pos] eq 'n' ) {
+        if ($tmpcount>=$minilength && $trimcenter ne 'no') {
      my $tmpseq=substr($trim_seq, $tmpstart, $tmpcount);
      my $tmpqual_seq=substr($trim_qual_seq, $tmpstart, $tmpcount);
 
@@ -1049,28 +1106,28 @@ sub adept_trim
        $longestseq=$tmpseq;
        $longestqual=$tmpqual_seq;
        $final_pos_5=$tmpstart;
-     # $final_pos_3=$tmpstart+$tmpcount;
       }
             }
          $trim_seq[$pos] = 'n';
+         $numqual[$pos]=0;
         $tmpstart=$pos+1; $tmpcount=0;
          } else {
   if ( ($qual < $prequal2*$discperc || $qual < $nextqual2*$discperc) && ($qual < $prequal1*$discperc || $qual < $nextqual1*$discperc)
          &&  ($nextqual2 < $nextavequal2 || $prequal2 < $preavequal2) && ($nextqual1 < $nextavequal1 || $prequal1 < $preavequal1) )
    {
-                 if ($tmpcount>=$minilength) {
+                 if ($tmpcount>=$minilength && $trimcenter ne 'no') {
      my $tmpseq=substr($trim_seq, $tmpstart, $tmpcount);
      my $tmpqual_seq=substr($trim_qual_seq, $tmpstart, $tmpcount);
 
-     if ($tmpcount>=$longestcount) {
+     if ($tmpcount>=$longestcount ) {
        $longestcount=$tmpcount;
        $longestseq=$tmpseq;
        $longestqual=$tmpqual_seq;
        $final_pos_5=$tmpstart;
-    #  $final_pos_3=$tmpstart+$tmpcount;
       }
             }
            $trim_seq[$pos] = 'n';
+           $numqual[$pos]=0;
         $tmpstart=$pos+1; $tmpcount=0;
           } else {
           $tmpcount++;
@@ -1081,6 +1138,7 @@ sub adept_trim
       my $nontrimseq=join "", @trim_seq;
 
   #end ADEPT trim 
+  if ($trimcenter ne 'no') {
   if ($longestseq && $longestqual) 
    {
       $final_pos_3=$final_pos_5+length($longestseq);
@@ -1088,7 +1146,17 @@ sub adept_trim
    } else {
        return ($nontrimseq,$trim_qual_seq,'a',0,0,0);
    }
-} 
+   } else { 
+   if  ($endstrimseq && $endstrimqual) {
+      $final_pos_3=$final_pos_5+length($endstrimseq);
+   return ($nontrimseq,$trim_qual_seq,$endstrimseq,$endstrimqual,$final_pos_5,$final_pos_3);
+   } else {
+       return ($nontrimseq,$trim_qual_seq,'a',0,0,0);
+   }
+ }
+
+}
+
 
 sub get_base_and_quality_info
 {
@@ -1108,15 +1176,12 @@ sub get_base_and_quality_info
      my %seq=%{$stats};
      $start_pos++;
      $end_pos--;
-    # my $tmpln=length($s);
      for my $pos($start_pos..$end_pos)
      {
-         #print "$q\n$tmpln,$pos,$start_pos,$end_pos,$len\n";
          my $q_digit=ord(substr($q,$pos-$start_pos,1))-$ascii;
          $seq{qual}->{$pos}->{$q_digit}++;
          $total_q += $q_digit; 
-         my $base=uc(substr($s,$pos-$start_pos,1));
-     #    print "$s\n$pos,$start_pos,$end_pos,'seq'\n";
+         my $base=substr($s,$pos-$start_pos,1);
          $seq{base}->{$pos}->{$base}++;
          $a_Base++ if ($base =~ /A/);  
          $t_Base++ if ($base =~ /T/);  
@@ -1137,7 +1202,7 @@ sub get_base_and_quality_info
          {
             my $q_digit=ord(substr($q,$pos-$start_pos,1))-$ascii;
             $seq{qual}->{$pos}->{$q_digit}--;
-            my $base=uc(substr($s,$pos-$start_pos,1));
+            my $base=substr($s,$pos-$start_pos,1);
             $seq{base}->{$pos}->{$base}--;
          }
          return (\%seq,$drop);
@@ -1230,8 +1295,6 @@ sub quality_encoding_coversion
 
 
 sub checkQualityFormat {
-    # $offset_value=&checkQualityFormat($fastq_file)
-    # $offset_value = -1 means not proper fastq format.
     my $fastq_file=shift;
     # open the files
     if ($fastq_file =~ /gz$/)
@@ -1264,11 +1327,9 @@ sub checkQualityFormat {
         # check if it is sanger or illumina/solexa, based on the ASCII image at http://en.wikipedia.org/wiki/FASTQ_format#Encoding
         if($number > 74){ # if solexa/illumina
           $offset=64;
-          #die "This file is solexa/illumina format\n"; # print result to terminal and die
           last OUTER; 
         }elsif($number < 59){ # if sanger
           $offset=33;
-          #die "This file is sanger format\n"; # print result to terminal and die
           last OUTER;
         }
        }
